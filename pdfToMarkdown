@@ -1,0 +1,48 @@
+#!/bin/sh
+#
+# pdfToMarkdown - convert a PDF to Markdown using the pdf-to-markdown image.
+#
+# Usage:
+#   pdfToMarkdown <file.pdf>
+#
+# The PDF is piped to the container on STDIN and the Markdown is written to
+# <input-filename>.md in the current folder. Docling's logs go to STDERR, so
+# the terminal stays readable while the conversion runs.
+#
+# Override the image with:
+#   PDF_TO_MARKDOWN_IMAGE=name:tag pdfToMarkdown file.pdf
+
+set -eu
+
+IMAGE="${PDF_TO_MARKDOWN_IMAGE:-pdf-to-markdown:latest}"
+
+if [ "$#" -ne 1 ]; then
+    echo "usage: $(basename "$0") <file.pdf>" >&2
+    exit 1
+fi
+
+PDF="$1"
+
+if [ ! -f "$PDF" ]; then
+    echo "error: file not found: $PDF" >&2
+    exit 1
+fi
+
+if ! docker image inspect "$IMAGE" > /dev/null 2>&1; then
+    echo "error: docker image $IMAGE not found - run 'make build' first" >&2
+    exit 1
+fi
+
+# Output name: <input-filename>.md in the current folder.
+STEM="$(basename "$PDF")"
+STEM="${STEM%.*}"
+OUT="$STEM.md"
+
+# Convert via a temp file so a failed run does not leave a truncated .md.
+TMP_OUT=$(mktemp)
+trap 'rm -f "$TMP_OUT"' EXIT
+
+docker run --rm -i "$IMAGE" < "$PDF" > "$TMP_OUT"
+mv "$TMP_OUT" "$OUT"
+
+echo "wrote $OUT" >&2
