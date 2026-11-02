@@ -3,7 +3,7 @@
 # pdfToMarkdown - convert a PDF to Markdown using the pdf-to-markdown image.
 #
 # Usage:
-#   pdfToMarkdown <file.pdf>
+#   pdfToMarkdown [--no-images] <file.pdf>
 #
 # The PDF is piped to the container on STDIN and the Markdown is written to
 # <input-filename>.md in the current folder. Docling's logs go to STDERR, so
@@ -15,13 +15,20 @@
 set -eu
 
 IMAGE="${PDF_TO_MARKDOWN_IMAGE:-pdf-to-markdown:latest}"
+NO_IMAGES=
 
-if [ "$#" -ne 1 ]; then
-    echo "usage: $(basename "$0") <file.pdf>" >&2
+if [ "$#" -eq 2 ] && [ "$1" = "--no-images" ]; then
+    NO_IMAGES=1
+    PDF="$2"
+elif [ "$#" -eq 2 ] && [ "$2" = "--no-images" ]; then
+    NO_IMAGES=1
+    PDF="$1"
+elif [ "$#" -eq 1 ]; then
+    PDF="$1"
+else
+    echo "usage: $(basename "$0") [--no-images] <file.pdf>" >&2
     exit 1
 fi
-
-PDF="$1"
 
 if [ ! -f "$PDF" ]; then
     echo "error: file not found: $PDF" >&2
@@ -42,7 +49,14 @@ OUT="$STEM.md"
 TMP_OUT=$(mktemp)
 trap 'rm -f "$TMP_OUT"' EXIT
 
-docker run --rm -i "$IMAGE" < "$PDF" > "$TMP_OUT"
+# Docling calls this export mode "placeholder"; the wrapper exposes it as
+# --no-images to describe its effect on the Markdown output.
+if [ "$NO_IMAGES" ]; then
+    docker run --rm -i "$IMAGE" --image-export-mode placeholder \
+        < "$PDF" > "$TMP_OUT"
+else
+    docker run --rm -i "$IMAGE" < "$PDF" > "$TMP_OUT"
+fi
 mv "$TMP_OUT" "$OUT"
 
 echo "wrote $OUT" >&2

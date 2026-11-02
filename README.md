@@ -18,33 +18,45 @@ naming the docling release actually installed in the image, e.g.
 `pdf-to-markdown:docling-2.126.0` (read from inside the image, so the tag can
 never drift from the build). Pin to the version tag for reproducible builds.
 
+Pushing to Docker Hub (`gencore/pdf-to-markdown`) pushes both tags:
+
+```bash
+docker login        # once per machine
+make push           # pushes gencore/pdf-to-markdown:latest + :docling-<version>
+```
+
+Override the destination with `PUSH_IMAGE=<namespace>/<repo> make push`.
+
 Equivalent manual pipeline:
 
 ```bash
 cat mydoc.pdf | docker run --rm -i pdf-to-markdown > mydoc.md
 ```
 
-Extra arguments are passed through to `docling convert`, for example:
+To omit images from the Markdown, use `--no-images`:
 
 ```bash
-./pdfToMarkdown --image-export-mode placeholder mydoc.pdf   # don't embed images
-./pdfToMarkdown --verbose mydoc.pdf                         # see what's happening
+./pdfToMarkdown --no-images mydoc.pdf
 ```
+
+This selects Docling's `placeholder` image export mode: the Markdown marks
+where images appeared but does not embed image data or export separate image
+files. Without the flag, images are embedded in the Markdown by default.
 
 Override the image with `PDF_TO_MARKDOWN_IMAGE=name:tag`.
 
 ## Usage
 
 ```
-pdfToMarkdown <file.pdf>
+pdfToMarkdown [--no-images] <file.pdf>
 ```
 
 Writes `<file.md>` (input stem + `.md`) in the current folder. A failed
 conversion never leaves a truncated output file.
 
-Note: docling's default `--image-export-mode embedded` inlines every image in
-the PDF as base64, which can make outputs much larger than the source. For
-text-processing pipelines, pass `--image-export-mode placeholder`.
+Note: Docling's default `--image-export-mode embedded` inlines every image in
+the PDF as base64, which can make outputs much larger than the source. Use
+`--no-images` for text-processing pipelines that do not need image content.
 
 ## The image
 
