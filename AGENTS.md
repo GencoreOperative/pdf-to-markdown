@@ -15,7 +15,7 @@ Markdown comes out via STDOUT, so it slots into processing pipelines.
 | `docker/Dockerfile` | Image build: CPU-only torch pin, transformers 4.x pin, pre-cached model weights |
 | `docker/entrypoint.sh` | Container entrypoint: STDIN → temp file → `docling convert` → STDOUT |
 | `pdfToMarkdown` | Shell wrapper: takes a PDF path, pipes it to the image, writes `<name>.md` |
-| `Makefile` | `make build` (tags `latest` + `docling-<version>`), `make convert PDF=...` |
+| `Makefile` | `make build` (tags `latest` + `docling-<version>`), `make push` (to `gencore/pdf-to-markdown`), `make convert PDF=...` |
 | `test/test.pdf` | Sample PDF for end-to-end smoke testing |
 
 ## Key commands
