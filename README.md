@@ -33,30 +33,41 @@ Equivalent manual pipeline:
 cat mydoc.pdf | docker run --rm -i pdf-to-markdown > mydoc.md
 ```
 
-To omit images from the Markdown, use `--no-images`:
+By default, images are embedded in the Markdown as base64. To package them as
+separate files with the Markdown, set `--embed-images false`:
 
 ```bash
-./pdfToMarkdown --no-images mydoc.pdf
+./pdfToMarkdown --embed-images false mydoc.pdf
 ```
 
-This selects Docling's `placeholder` image export mode: the Markdown marks
-where images appeared but does not embed image data or export separate image
-files. Without the flag, images are embedded in the Markdown by default.
+The wrapper reads the container's tar stream and writes `mydoc.md` plus an
+`images/` directory in the current folder. The Markdown links to images in
+that directory, so no folder needs to be mounted into the container. Use
+`--no-images` instead when image content is not needed.
+
+When invoking the container directly, `--embed-images false` writes a tar
+stream containing `document.md` and `images/`:
+
+```bash
+cat mydoc.pdf | docker run --rm -i pdf-to-markdown --embed-images false > mydoc.tar
+tar -xf mydoc.tar
+```
 
 Override the image with `PDF_TO_MARKDOWN_IMAGE=name:tag`.
 
 ## Usage
 
 ```
-pdfToMarkdown [--no-images] <file.pdf>
+pdfToMarkdown [--embed-images true|false | --no-images] <file.pdf>
 ```
 
 Writes `<file.md>` (input stem + `.md`) in the current folder. A failed
 conversion never leaves a truncated output file.
 
 Note: Docling's default `--image-export-mode embedded` inlines every image in
-the PDF as base64, which can make outputs much larger than the source. Use
-`--no-images` for text-processing pipelines that do not need image content.
+the PDF as base64, which can make outputs much larger than the source.
+`--embed-images false` writes a tar stream from the container and the wrapper
+unpacks its Markdown and separate `images/` files in the current folder.
 
 ## The image
 

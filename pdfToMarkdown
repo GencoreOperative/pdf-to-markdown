@@ -3,11 +3,12 @@
 # pdfToMarkdown - convert a PDF to Markdown using the pdf-to-markdown image.
 #
 # Usage:
-#   pdfToMarkdown [--no-images] <file.pdf>
+#   pdfToMarkdown [--embed-images true|false | --no-images] <file.pdf>
 #
 # The PDF is piped to the container on STDIN and the Markdown is written to
 # <input-filename>.md in the current folder. Docling's logs go to STDERR, so
 # the terminal stays readable while the conversion runs.
+# With --embed-images false, the wrapper also unpacks images into ./images.
 #
 # Override the image with:
 #   PDF_TO_MARKDOWN_IMAGE=name:tag pdfToMarkdown file.pdf
@@ -15,18 +16,54 @@
 set -eu
 
 IMAGE="${PDF_TO_MARKDOWN_IMAGE:-pdf-to-markdown:latest}"
-NO_IMAGES=
+IMAGE_MODE=embedded
+IMAGE_MODE_SET=
+PDF=
 
-if [ "$#" -eq 2 ] && [ "$1" = "--no-images" ]; then
-    NO_IMAGES=1
-    PDF="$2"
-elif [ "$#" -eq 2 ] && [ "$2" = "--no-images" ]; then
-    NO_IMAGES=1
-    PDF="$1"
-elif [ "$#" -eq 1 ]; then
-    PDF="$1"
-else
-    echo "usage: $(basename "$0") [--no-images] <file.pdf>" >&2
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --embed-images)
+            if [ "$IMAGE_MODE_SET" ]; then
+                echo "error: specify only one image mode" >&2
+                exit 1
+            fi
+            if [ "$#" -lt 2 ]; then
+                echo "error: --embed-images requires true or false" >&2
+                exit 1
+            fi
+            case "$2" in
+                true) IMAGE_MODE=embedded ;;
+                false) IMAGE_MODE=archive ;;
+                *)
+                    echo "error: --embed-images must be true or false" >&2
+                    exit 1
+                    ;;
+            esac
+            IMAGE_MODE_SET=1
+            shift 2
+            ;;
+        --no-images)
+            if [ "$IMAGE_MODE_SET" ]; then
+                echo "error: specify only one image mode" >&2
+                exit 1
+            fi
+            IMAGE_MODE=placeholder
+            IMAGE_MODE_SET=1
+            shift
+            ;;
+        *)
+            if [ -n "$PDF" ]; then
+                echo "usage: $(basename "$0") [--embed-images true|false | --no-images] <file.pdf>" >&2
+                exit 1
+            fi
+            PDF="$1"
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$PDF" ]; then
+    echo "usage: $(basename "$0") [--embed-images true|false | --no-images] <file.pdf>" >&2
     exit 1
 fi
 
@@ -45,18 +82,70 @@ STEM="$(basename "$PDF")"
 STEM="${STEM%.*}"
 OUT="$STEM.md"
 
-# Convert via a temp file so a failed run does not leave a truncated .md.
+# Convert to a temporary file so a failed run does not leave partial output.
 TMP_OUT=$(mktemp)
-trap 'rm -f "$TMP_OUT"' EXIT
+TMP_EXTRACT=
+trap 'rm -f "$TMP_OUT"; if [ -n "$TMP_EXTRACT" ]; then rm -rf "$TMP_EXTRACT"; fi' EXIT
 
-# Docling calls this export mode "placeholder"; the wrapper exposes it as
-# --no-images to describe its effect on the Markdown output.
-if [ "$NO_IMAGES" ]; then
+# Docling's referenced mode is returned as a tar archive; the wrapper unpacks
+# it and names the Markdown file after the input PDF.
+if [ "$IMAGE_MODE" = archive ]; then
+    docker run --rm -i "$IMAGE" --embed-images false < "$PDF" > "$TMP_OUT"
+    TMP_EXTRACT=$(mktemp -d)
+    tar -tf "$TMP_OUT" > "$TMP_EXTRACT/members"
+    HAVE_MARKDOWN=
+    HAVE_IMAGES=
+    while IFS= read -r MEMBER; do
+        case "$MEMBER" in
+            document.md) HAVE_MARKDOWN=1 ;;
+            images|images/) HAVE_IMAGES=1 ;;
+            images/*)
+                HAVE_IMAGES=1
+                IMAGE_NAME=${MEMBER#images/}
+                case "$IMAGE_NAME" in
+                    ""|.|..|*/*)
+                        echo "error: invalid image path in archive: $MEMBER" >&2
+                        exit 1
+                        ;;
+                esac
+                ;;
+            *)
+                echo "error: unexpected path in image archive: $MEMBER" >&2
+                exit 1
+                ;;
+        esac
+    done < "$TMP_EXTRACT/members"
+    if [ -z "$HAVE_MARKDOWN" ] || [ -z "$HAVE_IMAGES" ]; then
+        echo "error: image archive is missing expected members" >&2
+        exit 1
+    fi
+
+    tar -xf "$TMP_OUT" -C "$TMP_EXTRACT"
+    if [ ! -f "$TMP_EXTRACT/document.md" ] || [ -L "$TMP_EXTRACT/document.md" ] \
+        || [ ! -d "$TMP_EXTRACT/images" ] || [ -L "$TMP_EXTRACT/images" ]; then
+        echo "error: image archive is missing expected files" >&2
+        exit 1
+    fi
+    if [ -n "$(find "$TMP_EXTRACT/images" -type l -print -quit)" ]; then
+        echo "error: image archive contains a symbolic link" >&2
+        exit 1
+    fi
+
+    mkdir -p images
+    if [ -d "$TMP_EXTRACT/images" ]; then
+        for IMAGE_FILE in "$TMP_EXTRACT/images/"*; do
+            [ -f "$IMAGE_FILE" ] || continue
+            mv "$IMAGE_FILE" images/
+        done
+    fi
+    mv "$TMP_EXTRACT/document.md" "$OUT"
+elif [ "$IMAGE_MODE" = placeholder ]; then
     docker run --rm -i "$IMAGE" --image-export-mode placeholder \
         < "$PDF" > "$TMP_OUT"
+    mv "$TMP_OUT" "$OUT"
 else
     docker run --rm -i "$IMAGE" < "$PDF" > "$TMP_OUT"
+    mv "$TMP_OUT" "$OUT"
 fi
-mv "$TMP_OUT" "$OUT"
 
 echo "wrote $OUT" >&2
