@@ -58,11 +58,14 @@ Override the image with `PDF_TO_MARKDOWN_IMAGE=name:tag`.
 ## Usage
 
 ```
-pdfToMarkdown [--embed-images true|false | --no-images] <file.pdf>
+pdfToMarkdown [--help] [--embed-images true|false | --no-images] <file.pdf>
 ```
 
 Writes `<file.md>` (input stem + `.md`) in the current folder. A failed
 conversion never leaves a truncated output file.
+Run `./pdfToMarkdown --help` for wrapper options. For direct container use,
+`docker run --rm -i pdf-to-markdown --help` prints container usage and
+Docling's conversion options.
 
 Note: Docling's default `--image-export-mode embedded` inlines every image in
 the PDF as base64, which can make outputs much larger than the source.

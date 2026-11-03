@@ -20,8 +20,29 @@ IMAGE_MODE=embedded
 IMAGE_MODE_SET=
 PDF=
 
+show_help() {
+    cat <<EOF
+Usage: $(basename "$0") [--help] [--embed-images true|false | --no-images] <file.pdf>
+
+Convert a PDF to Markdown using the pdf-to-markdown Docker image.
+
+Options:
+  --help                  Show this help and exit
+  --embed-images true     Embed images in the Markdown (default)
+  --embed-images false    Write Markdown and images to separate files
+  --no-images             Omit image content
+
+The Markdown file is written to <input-stem>.md in the current directory.
+Set PDF_TO_MARKDOWN_IMAGE to use a different Docker image.
+EOF
+}
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        --help)
+            show_help
+            exit 0
+            ;;
         --embed-images)
             if [ "$IMAGE_MODE_SET" ]; then
                 echo "error: specify only one image mode" >&2

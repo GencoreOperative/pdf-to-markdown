@@ -22,6 +22,23 @@
 
 set -e
 
+if [ "$#" -eq 1 ] && [ "$1" = "--help" ]; then
+    cat <<'EOF'
+Usage: docker run --rm -i pdf-to-markdown [--embed-images true|false] [DOCLING_OPTIONS...]
+
+Read a PDF from STDIN and write Markdown to STDOUT. Docling logs go to STDERR.
+
+Options:
+  --help                  Show this help and Docling's convert options
+  --embed-images true     Embed images in the Markdown (default)
+  --embed-images false    Write a tar archive containing document.md and images/
+
+Additional arguments are passed to `docling convert`.
+EOF
+    docling convert --help
+    exit 0
+fi
+
 # Keep embedded Markdown as the default. In archive mode, use referenced
 # images and package the Markdown and image assets together on STDOUT.
 ARCHIVE_IMAGES=0
